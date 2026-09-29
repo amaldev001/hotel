@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Backend: lint + test
+  # ─────────────────────────────────────────────
+  backend:
+    name: Backend — Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Run backend tests
+        working-directory: server
+        env:
+          NODE_ENV: test
+          MONGODB_URI: mongodb://localhost:27017/food_ordering_test_db
+          JWT_SECRET: super_secret_jwt_secret_min_32_chars_long!
+          FRONTEND_ORIGIN: http://localhost:3000
+          APP_TIMEZONE: UTC
+          CURRENCY: USD
+          TAX_PERCENT: '5'
+          PAYMENT_GATEWAY: fake
+          STRIPE_SECRET_KEY: sk_test_mock
+          STRIPE_WEBHOOK_SECRET: whsec_test_secret_key
+          UPLOAD_DIR: uploads
+          PORT: '5000'
+        run: npm test
+
+      - name: Security audit (prod deps only)
+        working-directory: server
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
+  # ─────────────────────────────────────────────
+  # Frontend: lint + test + build
+  # ─────────────────────────────────────────────
+  frontend:
+    name: Frontend — Lint, Test & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci --legacy-peer-deps
+
+      - name: Run frontend tests
+        working-directory: client
+        run: npm test
+
+      - name: Build production bundle
+        working-directory: client
+        env:
+          VITE_API_BASE_URL: /api
+        run: npm run build
+
+      - name: Security audit (prod deps only)
+        working-directory: client
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
